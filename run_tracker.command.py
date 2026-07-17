@@ -1,0 +1,1 @@
+python3 /Users/bennettvotano/Desktop/portfolio_tracker/portfolio_tracker.py
