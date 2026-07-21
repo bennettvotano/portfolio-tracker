@@ -24,13 +24,26 @@ LOOKBACK_PERIOD = "1y"
 st.title("📈 Paper Portfolio Tracker")
 st.caption(f"Live data as of {datetime.today().strftime('%B %d, %Y')} — $10,000 paper portfolio vs. S&P 500")
 
+# Cache all network calls for 15 minutes so repeat page loads/viewers don't
+# re-trigger a burst of Yahoo Finance requests (which causes rate limiting
+# on shared cloud IPs like Streamlit Community Cloud).
+@st.cache_data(ttl=900)
+def get_last_price(ticker):
+    return yf.Ticker(ticker).fast_info["last_price"]
+
+@st.cache_data(ttl=900)
+def get_history(ticker, period):
+    return yf.Ticker(ticker).history(period=period)
+
+if st.button("Refresh data"):
+    st.cache_data.clear()
+
 with st.spinner("Pulling live market data..."):
     # Risk-free rate
-    irx = yf.Ticker("^IRX")
-    risk_free_rate = irx.fast_info["last_price"] / 100
+    risk_free_rate = get_last_price("^IRX") / 100
 
     # SPY benchmark history
-    spy_hist = yf.Ticker("SPY").history(period=LOOKBACK_PERIOD)
+    spy_hist = get_history("SPY", LOOKBACK_PERIOD)
     spy_returns = spy_hist["Close"].pct_change().dropna()
     market_variance = spy_returns.var()
 
@@ -41,8 +54,7 @@ with st.spinner("Pulling live market data..."):
     rows = []
 
     for ticker, info in portfolio.items():
-        stock = yf.Ticker(ticker)
-        current_price = stock.fast_info["last_price"]
+        current_price = get_last_price(ticker)
         buy_price = info["buy_price"]
         shares = info["shares"]
 
@@ -54,7 +66,7 @@ with st.spinner("Pulling live market data..."):
         total_invested += invested
         total_current += current_value
 
-        hist = stock.history(period=LOOKBACK_PERIOD)
+        hist = get_history(ticker, LOOKBACK_PERIOD)
         daily_returns = hist["Close"].pct_change().dropna()
         position_daily_returns[ticker] = daily_returns
 
@@ -99,7 +111,7 @@ with st.spinner("Pulling live market data..."):
     portfolio_annual_volatility = combined.std() * np.sqrt(252)
     portfolio_sharpe = (portfolio_annual_return - risk_free_rate) / portfolio_annual_volatility
 
-    spy_current = yf.Ticker("SPY").fast_info["last_price"]
+    spy_current = get_last_price("SPY")
     spy_pct = ((spy_current - SPY_BUY_PRICE) / SPY_BUY_PRICE) * 100
 
 # ------------------------------------------------------------
